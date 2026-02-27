@@ -50,8 +50,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.error(f"Error generating speech: {e}")
         await update.message.reply_text("❌ Something went wrong.")
     finally:
-        if os.path.exists(file_name):
-            os.remove(file_name)
+        # Delete the file only if it exists
+        if os.path.exists(audio_path):
+            os.remove(audio_path)
 
 # --------------------------
 # MAIN ENTRY POINT
