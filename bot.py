@@ -1,7 +1,6 @@
 import os
 import uuid
 import logging
-import asyncio
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import (
@@ -11,11 +10,9 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
-
-from config import BOT_TOKEN, FREE_DAILY_LIMIT, MAX_TEXT_LENGTH
 from services.tts_service import text_to_speech
 from utils.limits import can_use
-
+from config import BOT_TOKEN, FREE_DAILY_LIMIT, MAX_TEXT_LENGTH
 
 # Load environment variables
 load_dotenv()
@@ -26,7 +23,6 @@ logging.basicConfig(
     level=logging.INFO,
 )
 
-
 # /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -34,7 +30,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Send any text and I’ll convert it to speech.\n\n"
         f"Free users: {FREE_DAILY_LIMIT} conversions per day."
     )
-
 
 # Handle incoming text
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -62,6 +57,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         audio_path = await text_to_speech(user_text, file_name)
 
+        # Send as voice note (cleaner in Telegram)
         with open(audio_path, "rb") as audio_file:
             await update.message.reply_voice(voice=audio_file)
 
@@ -73,21 +69,22 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if os.path.exists(file_name):
             os.remove(file_name)
 
-
-# Async main function (Python 3.14 compatible)
+# Async main for Python 3.14 + PTB 21.6
 async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
+    # Register handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     logging.info("Bot is running...")
 
-    await app.initialize()
+    # Start bot
     await app.start()
     await app.updater.start_polling()
-    await app.updater.idle()
-
+    await app.updater.wait_closed()
+    await app.stop()
 
 if __name__ == "__main__":
+    import asyncio
     asyncio.run(main())
