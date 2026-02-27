@@ -1,6 +1,7 @@
 import os
 import uuid
 import logging
+import asyncio
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import (
@@ -16,14 +17,17 @@ from services.tts_service import text_to_speech
 from utils.limits import can_use
 
 
+# Load environment variables
 load_dotenv()
 
+# Logging setup
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
 
 
+# /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🎙 Welcome to AI Voice Bot!\n\n"
@@ -32,18 +36,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+# Handle incoming text
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_text = update.message.text.strip()
 
-    # Limit text size
+    # Check text length
     if len(user_text) > MAX_TEXT_LENGTH:
         await update.message.reply_text(
             f"⚠️ Max {MAX_TEXT_LENGTH} characters allowed."
         )
         return
 
-    # Usage limit check
+    # Check daily limit
     if not can_use(user_id, FREE_DAILY_LIMIT):
         await update.message.reply_text(
             "🚫 Daily limit reached.\n\nUpgrade to premium for unlimited access."
@@ -61,7 +66,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_voice(voice=audio_file)
 
     except Exception as e:
-        logging.error(f"Error: {e}")
+        logging.error(f"Error generating speech: {e}")
         await update.message.reply_text("❌ Something went wrong.")
 
     finally:
@@ -69,15 +74,20 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             os.remove(file_name)
 
 
-def main():
+# Async main function (Python 3.14 compatible)
+async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     logging.info("Bot is running...")
-    app.run_polling()
+
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+    await app.updater.idle()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
