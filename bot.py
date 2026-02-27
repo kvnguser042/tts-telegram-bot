@@ -57,7 +57,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         audio_path = await text_to_speech(user_text, file_name)
 
-        # Send as voice note (cleaner in Telegram)
         with open(audio_path, "rb") as audio_file:
             await update.message.reply_voice(voice=audio_file)
 
@@ -79,11 +78,12 @@ async def main():
 
     logging.info("Bot is running...")
 
-    # Start bot
-    await app.start()
-    await app.updater.start_polling()
-    await app.updater.wait_closed()
-    await app.stop()
+    # Correct async startup sequence
+    await app.initialize()             # ✅ Must call first
+    await app.start()                  # ✅ Start the application
+    await app.updater.start_polling()  # ✅ Start polling
+    await app.updater.wait_closed()    # ✅ Wait until shutdown
+    await app.stop()                   # ✅ Stop application cleanly
 
 if __name__ == "__main__":
     import asyncio
