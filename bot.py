@@ -3,13 +3,7 @@ import uuid
 import logging
 from dotenv import load_dotenv
 from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder,
-    MessageHandler,
-    CommandHandler,
-    ContextTypes,
-    filters,
-)
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from services.tts_service import text_to_speech
 from utils.limits import can_use
 from config import BOT_TOKEN, FREE_DAILY_LIMIT, MAX_TEXT_LENGTH
@@ -17,60 +11,54 @@ from config import BOT_TOKEN, FREE_DAILY_LIMIT, MAX_TEXT_LENGTH
 # Load environment variables
 load_dotenv()
 
-# Logging setup
+# Logging
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
-    level=logging.INFO,
+    level=logging.INFO
 )
 
 # /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🎙 Welcome to AI Voice Bot!\n\n"
-        "Send any text and I’ll convert it to speech.\n\n"
+        "🎙 Welcome to AI Voice Bot!\nSend text and I’ll convert it to speech.\n"
         f"Free users: {FREE_DAILY_LIMIT} conversions per day."
     )
 
-# Handle incoming text
+# Handle text messages
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    user_text = update.message.text.strip()
+    text = update.message.text.strip()
 
-    # Check text length
-    if len(user_text) > MAX_TEXT_LENGTH:
-        await update.message.reply_text(
-            f"⚠️ Max {MAX_TEXT_LENGTH} characters allowed."
-        )
+    if len(text) > MAX_TEXT_LENGTH:
+        await update.message.reply_text(f"⚠️ Max {MAX_TEXT_LENGTH} characters allowed.")
         return
 
-    # Check daily limit
     if not can_use(user_id, FREE_DAILY_LIMIT):
         await update.message.reply_text(
-            "🚫 Daily limit reached.\n\nUpgrade to premium for unlimited access."
+            "🚫 Daily limit reached. Upgrade to premium for unlimited access."
         )
         return
 
     await update.message.reply_text("🎙 Converting to speech...")
 
     file_name = f"{uuid.uuid4()}.mp3"
-
     try:
-        audio_path = await text_to_speech(user_text, file_name)
-
-        with open(audio_path, "rb") as audio_file:
-            await update.message.reply_voice(voice=audio_file)
-
+        audio_path = await text_to_speech(text, file_name)
+        with open(audio_path, "rb") as f:
+            await update.message.reply_voice(f)
     except Exception as e:
         logging.error(f"Error generating speech: {e}")
         await update.message.reply_text("❌ Something went wrong.")
-
     finally:
         if os.path.exists(file_name):
             os.remove(file_name)
 
-# Async main for Python 3.14 + PTB 21.6
-async def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+# --------------------------
+# MAIN ENTRY POINT
+# --------------------------
+if __name__ == "__main__":
+    # Build bot application
+    app = Application.builder().token(BOT_TOKEN).build()
 
     # Register handlers
     app.add_handler(CommandHandler("start", start))
@@ -78,13 +66,5 @@ async def main():
 
     logging.info("Bot is running...")
 
-    # Correct async startup sequence
-    await app.initialize()             # ✅ Must call first
-    await app.start()                  # ✅ Start the application
-    await app.updater.start_polling()  # ✅ Start polling
-    await app.updater.wait_closed()    # ✅ Wait until shutdown
-    await app.stop()                   # ✅ Stop application cleanly
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    # ✅ Stable polling on Python 3.14.3
+    app.run_polling()
